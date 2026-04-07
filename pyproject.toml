@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "a-cli"
+version = "1.0.0"
+description = "Natural language → Shell command. Just type: a <what you want to do>"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+keywords = ["cli", "shell", "ai", "llm", "productivity"]
+dependencies = [
+    "click>=8.1",
+    "rich>=13.0",
+    "InquirerPy>=0.3.4",
+    "openai>=1.0",
+    "tomli-w>=1.0",
+]
+
+[project.scripts]
+a = "a_cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["a_cli*"]

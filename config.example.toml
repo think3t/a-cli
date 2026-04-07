@@ -1,0 +1,140 @@
+# ═══════════════════════════════════════════════════════════
+#  a-cli 配置文件（完整示例）
+#  复制此文件为 ~/.config/a-cli/config.toml 后按需修改
+# ═══════════════════════════════════════════════════════════
+
+[model]
+# ── 服务商与接口 ──────────────────────────────────────
+# provider: 服务商标识（目前仅用于日志记录）
+provider = "openai"
+
+# api_base: API 接口地址，支持任何 OpenAI 兼容服务
+#   OpenAI          → https://api.openai.com/v1
+#   OpenRouter      → https://openrouter.ai/api/v1
+#   火山方舟(豆包)  → https://ark.cn-beijing.volces.com/api/v3
+#   DeepSeek        → https://api.deepseek.com
+#   本地 Ollama     → http://localhost:11434/v1
+api_base = "https://api.openai.com/v1"
+
+# api_key: API 密钥，支持以下方式设置：
+#   1. 此处直接填写（不推荐提交到版本控制）
+#   2. 环境变量 A_API_KEY
+#   3. 环境变量 OPENAI_API_KEY（兼容标准 OpenAI）
+api_key = ""
+
+# ── 模型选择 ──────────────────────────────────────────
+# model_name: 模型名称
+#   OpenAI       → gpt-4o-mini / gpt-4o / o3 / o4-mini
+#   OpenRouter   → google/gemma-3-27b-it:free / stepfun/step-3.5-flash:free
+#   DeepSeek     → deepseek-chat / deepseek-reasoner
+#   豆包(方舟)   → ep-xxx-xxx （端点ID）
+model_name = "gpt-4o-mini"
+
+# max_suggestions: 最多返回几个命令建议（1~5）
+max_suggestions = 3
+
+# temperature: 温度参数，越低输出越确定性（0.0 ~ 2.0）
+#   - 简单任务: 0.0 ~ 0.3
+#   - 创意任务: 0.7 ~ 1.0
+temperature = 0.2
+
+# max_tokens: 最大生成 token 数
+#   0 = 自动使用默认值（8192），适用于大多数模型
+#   推理模型（stepfun/deepseek-r1/DeepSeek-R1/o1/o3 等）建议设为 16384+
+#   因为这类模型需要大量 token 用于内部思考链
+max_tokens = 0
+
+# ── 深度思考配置 ──────────────────────────────────────
+# thinking_mode: 思考模式（火山方舟/豆包专用）
+#   "auto"     → 模型自行判断是否启用深度思考（推荐）
+#   "enabled"  → 强制开启深度思考
+#   "disabled" → 强制关闭深度思考
+thinking_mode = "auto"
+
+# reasoning_effort: 思考强度/推理 effort
+#   ""         → 不指定，由模型决定
+#   "minimal"  → 最少思考（最快、最省 token）
+#   "low"      → 低强度思考
+#   "medium"   → 中等强度（推荐）
+#   "high"     → 高强度（最慢、最费 token，但质量更高）
+# 注意：当 thinking_mode="disabled" 时，只能用 "minimal"，其他值会报错
+reasoning_effort = ""
+
+
+[behavior]
+# ── 行为配置 ──────────────────────────────────────────
+# auto_execute_single: 当只返回一个建议时是否自动执行（需确认）
+auto_execute_single = true
+
+# show_explanation: 是否显示每个命令的含义说明
+show_explanation = true
+
+# shell_type: 目标 shell 类型，留空自动检测当前 shell
+#   可选值: bash / zsh / fish / sh / pwsh / powershell / cmd
+shell_type = ""
+
+# ═══════════════════════════════════════════════════════════
+#  安全检查
+# ═══════════════════════════════════════════════════════════
+
+[safety]
+# enable_safety_check: 高风险命令安全检查
+#   内置 13 种危险命令模式（rm -rf /、dd 写盘、fork 炸弹、格式化磁盘等）
+#   匹配时将显示醒目警告并强制二次确认
+#   设为 false 可关闭此功能（不推荐）
+enable_safety_check = true
+
+# custom_patterns: 自定义高风险命令模式（可选）
+#   每条规则包含:
+#     pattern     - 正则表达式，用于匹配命令
+#     name        - 风险名称/描述
+#     risk_level  - 风险等级 1~5，5 为最高
+#     detail      - 详细说明
+#
+# 示例：
+# [[safety.custom_patterns]]
+# pattern    = "drop\\s+(?:database|table|schema)"
+# name       = "数据库结构删除"
+# risk_level = 4
+# detail     = "DROP 操作将永久删除数据库或表，数据不可恢复！"
+#
+# [[safety.custom_patterns]]
+# pattern    = "kubectl\\s+delete\\s+.*--all-namespaces"
+# name       = "集群级资源删除"
+# risk_level = 4
+# detail     = "删除全部命名空间下的资源，影响范围极广！"
+
+
+# ═══════════════════════════════════════════════════════════
+#  常用服务商配置速查
+# ═══════════════════════════════════════════════════════════
+#
+# 【OpenAI】
+#   api_base = "https://api.openai.com/v1"
+#   model_name = "gpt-4o-mini"
+#
+# 【OpenRouter】（支持多种免费/付费模型）
+#   api_base = "https://openrouter.ai/api/v1"
+#   api_key = "sk-or-v1-xxxxx"
+#   model_name = "google/gemma-3-27b-it:free"
+#   # 免费模型多为推理模型，建议加大 max_tokens:
+#   max_tokens = 16384
+#
+# 【DeepSeek】
+#   api_base = "https://api.deepseek.com"
+#   model_name = "deepseek-chat"          # 非推理版
+#   # 或
+#   model_name = "deepseek-reasoner"      # 推理版（R1），建议 max_tokens=16384
+#
+# 【火山方舟 / 豆包】
+#   api_base = "https://ark.cn-beijing.volces.com/api/v3"
+#   model_name = "ep-xxxxxxxx"            # 填写你的模型端点 ID
+#   thinking_mode = "enabled"             # 启用深度思考
+#   reasoning_effort = "medium"
+#
+# 【本地 Ollama】
+#   api_base = "http://localhost:11434/v1"
+#   api_key = "ollama"                    # 可填任意非空值
+#   model_name = "qwen2.5:7b"             # 已拉取的本地模型名
+#
+# ═══════════════════════════════════════════════════════════
