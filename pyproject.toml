@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "a-cli"
-version = "1.0.0"
+version = "1.0.1"
 description = "Natural language → Shell command. Just type: a <what you want to do>"
 readme = "README.md"
 requires-python = ">=3.11"

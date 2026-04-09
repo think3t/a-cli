@@ -55,6 +55,28 @@ cd a-cli
 pip install -e .
 ```
 
+## 升级
+
+### uv 安装方式
+
+```bash
+# 从 Git 仓库升级
+uv tool install git+https://github.com/think3t/a-cli.git --force
+
+# 本地源码升级（pull 后重新安装）
+cd a-cli
+git pull
+uv tool install . --force
+```
+
+### pip 安装方式
+
+```bash
+# 开发模式安装后，pull 即生效
+cd a-cli
+git pull
+```
+
 ## 快速开始
 
 安装后只需一步——设置 API Key：

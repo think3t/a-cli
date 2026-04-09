@@ -4,6 +4,7 @@
 - 返回结构化的命令建议列表
 """
 import json
+import os
 import platform
 import subprocess
 import sys
@@ -42,7 +43,14 @@ Rules:
   For fish: NO bash brace expansion ({{1..10}}), NO $((expr)), use `seq` instead. NO `[[ ]]`, use `test` or `begin/end`. NO `&&`/`||` in conditionals, use `; and`/`; or`.
   For zsh/bash: brace expansion ({{1..10}}), [[ ]], &&, || are all valid.
   When in doubt, use portable POSIX syntax or simple pipe chains.
-- Target OS: {os_name}
+- Target OS: {os_info}
+  CRITICAL: Commands MUST be fully compatible with the exact OS distribution and version shown above.
+  Different distros/versions have different package managers, flag syntax, and tool availability:
+  - Debian/Ubuntu use `apt` (not `dnf`/`yum`/`pacman`); Alpine uses `apk`.
+  - macOS (Darwin) requires Homebrew (`brew`) for most packages; flags often differ from GNU versions (e.g. `sed -i ''` vs `sed -i`).
+  - Consider version-specific differences: older distros may lack certain flags or tools.
+  - When multiple tools exist (e.g. `ip` vs `ifconfig`), prefer the one appropriate for this OS version.
+  If you are unsure about tool/flag availability on this specific OS, say so in the explanation.
 - Respond in JSON only.
 """
 
@@ -50,16 +58,106 @@ USER_PROMPT_TEMPLATE = "I want to: {query}"
 
 
 def _get_os_info() -> str:
-    """获取操作系统信息"""
-    return platform.system()  # Darwin / Linux / Windows
+    """获取详细的操作系统信息（发行版 + 版本号）"""
+    system = platform.system()
+
+    if system == "Linux":
+        # 优先解析 /etc/os-release 获取发行版详情
+        os_release_path = "/etc/os-release"
+        pretty_name = ""
+        if os.path.isfile(os_release_path):
+            try:
+                with open(os_release_path, encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith("PRETTY_NAME="):
+                            # 去除引号：PRETTY_NAME="Alpine Linux v3.23"
+                            pretty_name = line.split("=", 1)[1].strip('"')
+                            break
+            except OSError:
+                pass
+
+        if pretty_name:
+            return f"{system} ({pretty_name})"
+
+        # 回退：尝试 lsb_release
+        try:
+            result = subprocess.run(
+                ["lsb_release", "-ds"],
+                capture_output=True, text=True, timeout=3,
+            )
+            if result.returncode == 0:
+                distro = result.stdout.strip()
+                return f"{system} ({distro})"
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+
+        # 再回退：尝试 /etc/redhat-release 等
+        for fallback_file in (
+            "/etc/redhat-release",
+            "/etc/fedora-release",
+            "/etc/centos-release",
+            "/etc/alpine-release",
+        ):
+            if os.path.isfile(fallback_file):
+                try:
+                    with open(fallback_file, encoding="utf-8") as f:
+                        content = f.read().strip()
+                        return f"{system} ({content})"
+                except OSError:
+                    pass
+
+        return system
+
+    elif system == "Darwin":
+        # macOS: 通过 sw_vers 获取版本
+        try:
+            result = subprocess.run(
+                ["sw_vers"],
+                capture_output=True, text=True, timeout=3,
+            )
+            if result.returncode == 0:
+                lines = result.stdout.strip().splitlines()
+                parts = [l.split(":", 1)[1].strip() for l in lines if ":" in l]
+                if len(parts) >= 3:
+                    return f"{system} ({parts[0]} {parts[1]} {parts[2]})"
+                elif parts:
+                    return f"{system} ({parts[0]})"
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+
+        # 回退到 platform.mac_ver()
+        mac_ver = platform.mac_ver()[0]
+        if mac_ver:
+            return f"{system} (macOS {mac_ver})"
+        return system
+
+    elif system == "Windows":
+        ver = platform.win32_ver()
+        # ver = (release, version, csd, ptype)
+        release, version, csd, ptype = ver
+        parts = []
+        if release:
+            parts.append(release)
+        if version:
+            parts.append(f"Build {version}")
+        if csd:
+            parts.append(csd)
+        if ptype:
+            parts.append(ptype)
+        if parts:
+            return f"{system} ({' '.join(parts)})"
+        return system
+
+    return system
 
 
 def _build_messages(query: str, max_suggestions: int, shell: str) -> list[dict]:
-    os_name = _get_os_info()
+    os_info = _get_os_info()
     system = SYSTEM_PROMPT.format(
         max_suggestions=max_suggestions,
         shell=shell,
-        os_name=os_name,
+        os_info=os_info,
     )
     return [
         {"role": "system", "content": system},
