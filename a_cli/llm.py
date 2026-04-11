@@ -6,6 +6,7 @@
 import json
 import os
 import platform
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -51,10 +52,55 @@ Rules:
   - Consider version-specific differences: older distros may lack certain flags or tools.
   - When multiple tools exist (e.g. `ip` vs `ifconfig`), prefer the one appropriate for this OS version.
   If you are unsure about tool/flag availability on this specific OS, say so in the explanation.
+- {user_permission_info}
 - Respond in JSON only.
 """
 
 USER_PROMPT_TEMPLATE = "I want to: {query}"
+
+
+def is_root_user() -> bool:
+    """检测当前用户是否为 root 用户（Unix 系统）。
+
+    Returns:
+        True 如果当前是 root 用户，否则 False（包括 Windows 等非 Unix 系统）
+    """
+    try:
+        # Unix 系统: geteuid() 返回 0 表示 root
+        return os.geteuid() == 0
+    except AttributeError:
+        # Windows 或其他平台没有 geteuid()，返回 False
+        return False
+
+
+def _adjust_command_sudo(command: str) -> str:
+    """根据当前用户权限调整命令中的 sudo。
+
+    - 如果是 root 用户：移除命令开头的 'sudo ' 前缀
+    - 如果不是 root 用户：保持命令不变
+
+    注意：这是一个纵深防御措施，主要依赖 LLM prompt 中的指示。
+    这里只处理最常见的情况：移除开头的 sudo。
+
+    Args:
+        command: 原始命令字符串
+
+    Returns:
+        调整后的命令字符串
+    """
+    if not is_root_user():
+        return command
+
+    cmd = command.strip()
+
+    # 使用单词边界确保只匹配完整的 "sudo" 单词
+    # 避免误匹配 "sudoku" 等词
+    if re.match(r"^sudo\b", cmd, re.IGNORECASE):
+        # 移除开头的 sudo，保留后面的内容
+        # 支持 "sudo ", "sudo\t", "sudo\n" 等情况
+        cmd = re.sub(r"^sudo\b\s*", "", cmd, flags=re.IGNORECASE)
+
+    return cmd.strip()
 
 
 def _get_os_info() -> str:
@@ -154,10 +200,20 @@ def _get_os_info() -> str:
 
 def _build_messages(query: str, max_suggestions: int, shell: str) -> list[dict]:
     os_info = _get_os_info()
+    if is_root_user():
+        user_permission_info = (
+            "Current user: root (no sudo needed) — DO NOT prepend 'sudo' to any commands."
+        )
+    else:
+        user_permission_info = (
+            "Current user: non-root (use sudo for privileged commands) — prepend 'sudo' "
+            "to commands that require root privileges."
+        )
     system = SYSTEM_PROMPT.format(
         max_suggestions=max_suggestions,
         shell=shell,
         os_info=os_info,
+        user_permission_info=user_permission_info,
     )
     return [
         {"role": "system", "content": system},
@@ -184,9 +240,11 @@ def _parse_suggestions(raw: str) -> list[CommandSuggestion]:
         cmd = str(item.get("command", "")).strip()
         if not cmd:
             continue
+        # 根据当前用户权限调整命令中的 sudo
+        adjusted_cmd = _adjust_command_sudo(cmd)
         suggestions.append(
             CommandSuggestion(
-                command=cmd,
+                command=adjusted_cmd,
                 explanation=str(item.get("explanation", "")).strip(),
                 confidence=float(item.get("confidence", 0.8)),
             )
